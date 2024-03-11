@@ -8,6 +8,13 @@ type OutputArray<T extends DataType> = T extends 'uint8'
   ? Float32Array
   : never;
 
+export enum ROTATION {
+  R0 = 0,
+  R90 = 90,
+  R180 = 180,
+  R270 = 270,
+}
+
 interface Size {
   /**
    * The width to resize the Frame to.
@@ -31,6 +38,9 @@ interface Rect extends Size {
 }
 
 interface Options<T extends DataType> {
+  /**
+   * If set to `true`, the image will be flipped horizontally.
+   */
   flip?: boolean;
   /**
    * Crops the image to the given target rect. This is applied first before scaling.
@@ -43,6 +53,11 @@ interface Options<T extends DataType> {
    */
   scale?: Size;
   /**
+   * rotation of the image in degrees.
+   * defaults to Rotation.R0 (0)
+   */
+  rotation?: Rotation;
+  /**
    * Convert the Frame to the given target pixel format.
    *
    * - `'rgb'`: [R, G, B] layout
@@ -52,11 +67,6 @@ interface Options<T extends DataType> {
    * - `'bgr'`: [B, G, R]
    * - `'abgr'`: [A, B, G, R]
    */
-  rotation?: 0 | 90 | 180 | 270;
-  /**
-   * rotation of the image in degrees.
-   *  defaults to 0
-  */
   pixelFormat: 'rgb' | 'rgba' | 'argb' | 'bgra' | 'bgr' | 'abgr';
   /**
    * The given type to use for the resulting buffer.

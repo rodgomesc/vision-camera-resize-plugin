@@ -27,6 +27,8 @@
   FrameBuffer* _argbBuffer;
   // 2. ARGB (?x?) -> ARGB (!x!)
   FrameBuffer* _resizeBuffer;
+  FrameBuffer* _flipBuffer;
+  FrameBuffer* _rotateBuffer;
   // 3. ARGB (!x!) -> !!!! (!x!)
   FrameBuffer* _convertBuffer;
   // 3. uint8 -> other type (e.g. float32) if needed
@@ -348,6 +350,79 @@ vImage_YpCbCrPixelRange getRange(FourCharCode pixelFormat) {
   return _customTypeBuffer;
 }
 
+- (FrameBuffer*)flipARGBBuffer:(FrameBuffer*)buffer flip:(BOOL)flip {
+
+  if (!flip) {
+    return buffer;
+  }
+
+  NSLog(@"Flipping ARGB buffer...");
+
+  if (_flipBuffer == nil || _flipBuffer.width != buffer.width || _flipBuffer.height != buffer.height) {
+    _flipBuffer = [[FrameBuffer alloc] initWithWidth:buffer.width height:buffer.height pixelFormat:buffer.pixelFormat dataType:buffer.dataType proxy:_proxy];
+  }
+
+  vImage_Buffer src = *buffer.imageBuffer;
+  vImage_Buffer dest = *_flipBuffer.imageBuffer;
+
+  vImage_Error error = vImageHorizontalReflect_ARGB8888(&src, &dest, kvImageNoFlags);
+  if (error != kvImageNoError) {
+    [NSException raise:@"Flip Error" format:@"Failed to flip ARGB buffer! Error: %ld", error];
+  }
+
+  return _flipBuffer;
+}
+
+- (FrameBuffer*)rotateARGBBuffer:(FrameBuffer*)buffer rotation:(int)rotation {
+    if (rotation == 0) {
+      return buffer;
+    }
+    
+    NSLog(@"Rotating ARGB buffer...");
+
+    int rotatedWidth = buffer.width;
+    int rotatedHeight = buffer.height;
+    if (rotation == 90 || rotation == 270) {
+      int temp = rotatedWidth;
+      rotatedWidth = rotatedHeight;
+      rotatedHeight = temp;
+    }
+
+    size_t bytesPerPixel = [FrameBuffer getBytesPerPixel:buffer.pixelFormat withType:buffer.dataType];
+   
+
+    if (_rotateBuffer == nil || _rotateBuffer.width != rotatedWidth || _rotateBuffer.height != rotatedHeight) {
+      _rotateBuffer = [[FrameBuffer alloc] initWithWidth:rotatedWidth height:rotatedHeight pixelFormat:buffer.pixelFormat dataType:buffer.dataType proxy:_proxy];
+    }
+
+    vImage_Buffer src = *buffer.imageBuffer;
+    vImage_Buffer dest = *_rotateBuffer.imageBuffer;
+
+    vImage_Error error = kvImageNoError;
+    Pixel_8888 backgroundColor = {0, 0, 0, 0};
+    if (rotation == 90) {
+      error = vImageRotate90_ARGB8888(&src, &dest, kRotate90DegreesClockwise, backgroundColor, kvImageNoFlags);
+    } else if (rotation == 180) {
+      error = vImageRotate90_ARGB8888(&src, &dest, kRotate180DegreesClockwise, backgroundColor, kvImageNoFlags);
+    } else if (rotation == 270) {
+      error = vImageRotate90_ARGB8888(&src, &dest, kRotate270DegreesClockwise, backgroundColor, kvImageNoFlags);
+    } else {
+      [NSException raise:@"Invalid Rotation" format:@"Rotation must be 0, 90, 180, or 270 degrees."];
+      return nil;
+    }
+
+    if (error != kvImageNoError) {
+      [NSException raise:@"Rotation Error" format:@"Failed to rotate ARGB buffer! Error: %ld", error];
+    }
+
+    if (error != kvImageNoError) {
+      [NSException raise:@"Rotation Error" format:@"Failed to rotate ARGB buffer! Error: %ld", error];
+    }
+    
+    return _rotateBuffer;
+}
+
+
 // Used only for debugging/inspecting the Image.
 - (UIImage*)bufferToImage:(FrameBuffer*)buffer {
   CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
@@ -385,6 +460,8 @@ vImage_YpCbCrPixelRange getRange(FourCharCode pixelFormat) {
   double cropX = 0;
   double cropY = 0;
   NSDictionary* crop = arguments[@"crop"];
+  BOOL flip = [[arguments objectForKey:@"flip"] boolValue];
+  int rotation = [arguments[@"rotation"] intValue];
   if (crop != nil) {
     cropWidth = ((NSNumber*)crop[@"width"]).doubleValue;
     cropHeight = ((NSNumber*)crop[@"height"]).doubleValue;
@@ -451,13 +528,19 @@ vImage_YpCbCrPixelRange getRange(FourCharCode pixelFormat) {
   CGSize scaleSize = CGSizeMake(scaleWidth, scaleHeight);
   result = [self resizeARGB:result crop:cropRect scale:scaleSize];
 
-  // 4. Convert ARGB -> ??? format
+  // 4. Rotate
+  result = [self rotateARGBBuffer:result rotation:rotation];
+  
+  // 5. Flip
+  result = [self flipARGBBuffer:result flip:flip];
+
+  // 6. Convert ARGB -> ??? format
   result = [self convertARGB:result to:pixelFormat];
 
-  // 5. Convert UINT8 -> ??? type
+  // 7. Convert UINT8 -> ??? type
   result = [self convertInt8Buffer:result toDataType:dataType];
 
-  // 6. Return to JS
+  // 8. Return to JS
   return result.sharedArray;
 }
 

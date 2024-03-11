@@ -7,11 +7,11 @@ import {
   useCameraPermission,
   useFrameProcessor,
 } from 'react-native-vision-camera';
-import { useResizePlugin } from 'vision-camera-resize-plugin';
+import { ROTATION, useResizePlugin } from 'vision-camera-resize-plugin';
 
 export default function App() {
   const permission = useCameraPermission();
-  const device = useCameraDevice('back');
+  const device = useCameraDevice('front');
 
   React.useEffect(() => {
     permission.requestPermission();
@@ -35,7 +35,7 @@ export default function App() {
       },
       pixelFormat: 'rgba',
       dataType: 'uint8',
-      rotation: 180,
+      rotation: ROTATION.R90,
       flip: true,
     });
     console.log(
